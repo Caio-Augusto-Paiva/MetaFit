@@ -82,13 +82,13 @@ const Dashboard = () => {
     fetchMeals();
   };
 
+  // Values in food_database are per gram, so multiply by quantity
   const calcMacros = (food: FoodItem, qty: number) => {
-    const factor = qty / food.porcao_g;
     return {
-      cal: Math.round(food.calorias * factor),
-      prot: Math.round(food.proteinas * factor * 10) / 10,
-      carb: Math.round(food.carboidratos * factor * 10) / 10,
-      fat: Math.round(food.gorduras * factor * 10) / 10,
+      cal: Math.round(food.calorias_g * qty),
+      prot: Math.round(food.proteinas_g * qty * 10) / 10,
+      carb: Math.round(food.carbos_g * qty * 10) / 10,
+      fat: Math.round(food.gorduras_g * qty * 10) / 10,
     };
   };
 
@@ -112,12 +112,12 @@ const Dashboard = () => {
     if (meals.length === 0) return;
     const lastMeal = meals[meals.length - 1];
     if (!lastMeal.food_database) return;
-    const targetCal = lastMeal.food_database.calorias;
+    const targetCal = lastMeal.food_database.calorias_g;
     const { data } = await supabase
       .from('food_database')
       .select('*')
-      .gte('calorias', targetCal - 30)
-      .lte('calorias', targetCal + 30)
+      .gte('calorias_g', targetCal - 0.5)
+      .lte('calorias_g', targetCal + 0.5)
       .neq('id', lastMeal.food_id)
       .limit(1);
     if (data && data.length > 0) setSuggestion(data[0] as FoodItem);
@@ -180,7 +180,9 @@ const Dashboard = () => {
             <div>
               <p className="text-xs text-primary font-medium">💡 Sugestão com macros similares</p>
               <p className="font-medium text-sm">{suggestion.nome}</p>
-              <p className="text-xs text-muted-foreground">{suggestion.calorias} kcal | P:{suggestion.proteinas}g C:{suggestion.carboidratos}g G:{suggestion.gorduras}g</p>
+              <p className="text-xs text-muted-foreground">
+                {suggestion.calorias_g} kcal/g | P:{suggestion.proteinas_g}g C:{suggestion.carbos_g}g G:{suggestion.gorduras_g}g
+              </p>
             </div>
             <button onClick={() => setSuggestion(null)} className="text-muted-foreground"><X className="w-4 h-4" /></button>
           </div>
@@ -245,7 +247,7 @@ const Dashboard = () => {
                     >
                       <p className="font-medium text-sm">{f.nome}</p>
                       <p className="text-xs text-muted-foreground">
-                        {f.calorias} kcal / {f.porcao_g}g · P:{f.proteinas}g C:{f.carboidratos}g G:{f.gorduras}g
+                        {f.calorias_g} kcal/g · P:{f.proteinas_g}g C:{f.carbos_g}g G:{f.gorduras_g}g
                       </p>
                     </button>
                   ))}
@@ -256,7 +258,7 @@ const Dashboard = () => {
                 <div className="glass rounded-lg p-3">
                   <p className="font-medium">{selectedFood.nome}</p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedFood.calorias} kcal / {selectedFood.porcao_g}g
+                    {selectedFood.calorias_g} kcal/g
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
