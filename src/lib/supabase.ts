@@ -19,11 +19,10 @@ export interface AppUser {
 export interface FoodItem {
   id: string;
   nome: string;
-  calorias: number;
-  proteinas: number;
-  carboidratos: number;
-  gorduras: number;
-  porcao_g: number;
+  calorias_g: number;
+  proteinas_g: number;
+  carbos_g: number;
+  gorduras_g: number;
 }
 
 export interface Meal {
