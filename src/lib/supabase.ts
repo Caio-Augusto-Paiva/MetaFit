@@ -13,6 +13,9 @@ export interface AppUser {
   peso: number;
   objetivo: UserGoal;
   calorias_meta: number | null;
+  proteinas_meta: number | null;
+  carbos_meta: number | null;
+  gorduras_meta: number | null;
   created_at: string;
 }
 
@@ -23,6 +26,7 @@ export interface FoodItem {
   proteinas_g: number;
   carbos_g: number;
   gorduras_g: number;
+  user_id?: string | null; // Para receitas privadas do usuário
 }
 
 export interface Meal {
@@ -39,9 +43,22 @@ export interface Meal {
 export interface Workout {
   id: string;
   user_id: string;
-  tipo: string;
-  duracao_min: number;
+  tipo?: string;
+  duracao_min?: number;
+  tipo_atividade?: string;
+  duracao_minutos?: number;
   calorias_gastas: number;
   data: string;
   created_at: string;
+}
+
+export interface RecipeIngredient {
+  foodId: string;
+  gramas: number;
+  food?: FoodItem;
+}
+
+export interface CreateRecipeData {
+  nome: string;
+  ingredients: RecipeIngredient[];
 }

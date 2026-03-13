@@ -1,11 +1,12 @@
 import { useAuthContext } from '@/contexts/AuthContext';
-import { Utensils, Dumbbell, Brain, LogOut, User } from 'lucide-react';
+import { Utensils, Dumbbell, Brain, LogOut, User, ArrowRightLeft } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 const tabs = [
   { to: '/', icon: Utensils, label: 'Refeições' },
   { to: '/workouts', icon: Dumbbell, label: 'Treinos' },
   { to: '/diet', icon: Brain, label: 'Dieta IA' },
+  { to: '/equivalencias', icon: ArrowRightLeft, label: 'Equivalências' },
 ];
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {

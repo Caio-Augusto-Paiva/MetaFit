@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { supabase, Workout } from '@/lib/supabase';
+import { useAppDataContext } from '@/contexts/AppDataContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Trash2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const MET_VALUES: Record<string, number> = {
   'Caminhada (6 km/h)': 5.0,
@@ -18,25 +19,18 @@ const MET_VALUES: Record<string, number> = {
 
 const Workouts = () => {
   const { user, profile } = useAuthContext();
+  const { getDailyData, ensureDateLoaded, addWorkout: addWorkoutEntry, deleteWorkout: deleteWorkoutEntry } = useAppDataContext();
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [tipo, setTipo] = useState('Caminhada (6 km/h)');
   const [duracao, setDuracao] = useState('30');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (user) fetchWorkouts();
-  }, [user, date]);
+    if (!user) return;
+    void ensureDateLoaded(date);
+  }, [user, date, ensureDateLoaded]);
 
-  const fetchWorkouts = async () => {
-    const { data } = await supabase
-      .from('workouts')
-      .select('*')
-      .eq('user_id', user!.id)
-      .eq('data', date)
-      .order('created_at', { ascending: false });
-    if (data) setWorkouts(data as Workout[]);
-  };
+  const { workouts, loadingWorkouts } = useMemo(() => getDailyData(date), [getDailyData, date]);
 
   const calcCalories = (tipoExercicio: string, duracaoMin: number): number => {
     const met = MET_VALUES[tipoExercicio] || 5.0;
@@ -47,25 +41,51 @@ const Workouts = () => {
 
   const addWorkout = async () => {
     if (!user) return;
-    setLoading(true);
-    const calorias = calcCalories(tipo, Number(duracao));
-    const { error } = await supabase.from('workouts').insert({
-      user_id: user.id,
-      tipo,
-      duracao_min: Number(duracao),
-      calorias_gastas: calorias,
-      data: date,
-    });
-    if (!error) {
-      await fetchWorkouts();
+    setIsSubmitting(true);
+
+    try {
+      const duracaoMin = Number(duracao);
+      if (!Number.isFinite(duracaoMin) || duracaoMin <= 0) {
+        throw new Error('Informe uma duracao valida em minutos');
+      }
+
+      const calorias = calcCalories(tipo, duracaoMin);
+      await addWorkoutEntry({
+        date,
+        tipo,
+        duracaoMin,
+        caloriasGastas: calorias,
+      });
+
       setDuracao('30');
+      toast.success('Exercicio registrado com sucesso');
+    } catch (err) {
+      console.log('Erro detalhado no insert de workout:', err, {
+        payload: {
+          user_id: user?.id,
+          data: date,
+          tipo_atividade: tipo,
+          duracao_minutos: Number(duracao),
+          calorias_gastas: calcCalories(tipo, Number(duracao) || 0),
+        },
+      });
+      toast.error('Falha ao registrar exercicio', {
+        description: err instanceof Error ? err.message : 'Tente novamente em instantes',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-    setLoading(false);
   };
 
-  const deleteWorkout = async (id: string) => {
-    await supabase.from('workouts').delete().eq('id', id);
-    fetchWorkouts();
+  const handleDeleteWorkout = async (id: string) => {
+    try {
+      await deleteWorkoutEntry({ date, workoutId: id });
+      toast.success('Treino removido');
+    } catch (err) {
+      toast.error('Falha ao remover treino', {
+        description: err instanceof Error ? err.message : 'Tente novamente em instantes',
+      });
+    }
   };
 
   const previewCal = calcCalories(tipo, Number(duracao) || 0);
@@ -104,8 +124,15 @@ const Workouts = () => {
           Cálculo: MET × {profile?.peso || '??'}kg × {Number(duracao) / 60}h
         </p>
 
-        <Button onClick={addWorkout} disabled={loading} className="w-full glow">
-          Registrar Exercício
+        <Button onClick={addWorkout} disabled={isSubmitting} className="w-full glow">
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Registrando...
+            </>
+          ) : (
+            'Registrar Exercício'
+          )}
         </Button>
       </div>
 
@@ -120,19 +147,23 @@ const Workouts = () => {
         />
       </div>
 
-      {workouts.length === 0 ? (
+      {loadingWorkouts ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : workouts.length === 0 ? (
         <p className="text-center text-muted-foreground text-sm py-8">Nenhum treino registrado</p>
       ) : (
         <div className="space-y-2">
           {workouts.map((w) => (
             <div key={w.id} className="glass rounded-lg p-3 flex items-center justify-between animate-fade-in">
               <div>
-                <p className="font-medium text-sm">{w.tipo}</p>
+                <p className="font-medium text-sm">{w.tipo || w.tipo_atividade}</p>
                 <p className="text-xs text-muted-foreground">
-                  {w.duracao_min} min · {w.calorias_gastas} kcal
+                  {w.duracao_min ?? w.duracao_minutos} min · {w.calorias_gastas} kcal
                 </p>
               </div>
-              <button onClick={() => deleteWorkout(w.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+              <button onClick={() => handleDeleteWorkout(w.id)} className="text-muted-foreground hover:text-destructive transition-colors">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
