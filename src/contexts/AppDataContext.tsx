@@ -29,6 +29,10 @@ type AppDataContextType = {
     quantidadeGramas: number;
     hora: string;
   }) => Promise<void>;
+  addMealsBatch: (payload: {
+    date: string;
+    items: Array<{ foodId: string; quantidadeGramas: number; hora: string }>;
+  }) => Promise<void>;
   deleteMeal: (payload: { date: string; mealId: string }) => Promise<void>;
   addWorkout: (payload: {
     date: string;
@@ -182,6 +186,38 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     void ensureDateLoaded(today);
   }, [user?.id, ensureDateLoaded]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`app-data-sync-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meals', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const changedDate = String((payload.new as { data?: string })?.data || (payload.old as { data?: string })?.data || '');
+          if (changedDate) {
+            void fetchMealsForDate(changedDate);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'workouts', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const changedDate = String((payload.new as { data?: string })?.data || (payload.old as { data?: string })?.data || '');
+          if (changedDate) {
+            void fetchWorkoutsForDate(changedDate);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchMealsForDate, fetchWorkoutsForDate]);
+
   const addMeal = useCallback(async (payload: { date: string; foodId: string; quantidadeGramas: number; hora: string }) => {
     if (!user?.id) return;
 
@@ -193,6 +229,26 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       hora: payload.hora,
     });
 
+    if (error) throw error;
+    await fetchMealsForDate(payload.date);
+  }, [user?.id, fetchMealsForDate]);
+
+  const addMealsBatch = useCallback(async (payload: {
+    date: string;
+    items: Array<{ foodId: string; quantidadeGramas: number; hora: string }>;
+  }) => {
+    if (!user?.id) return;
+    if (!payload.items.length) return;
+
+    const rows = payload.items.map((item) => ({
+      user_id: user.id,
+      food_id: item.foodId,
+      quantidade_gramas: item.quantidadeGramas,
+      data: payload.date,
+      hora: item.hora,
+    }));
+
+    const { error } = await supabase.from('meals').insert(rows);
     if (error) throw error;
     await fetchMealsForDate(payload.date);
   }, [user?.id, fetchMealsForDate]);
@@ -265,10 +321,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ensureDateLoaded,
     refreshDate,
     addMeal,
+    addMealsBatch,
     deleteMeal,
     addWorkout,
     deleteWorkout,
-  }), [getDailyData, ensureDateLoaded, refreshDate, addMeal, deleteMeal, addWorkout, deleteWorkout]);
+  }), [getDailyData, ensureDateLoaded, refreshDate, addMeal, addMealsBatch, deleteMeal, addWorkout, deleteWorkout]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };

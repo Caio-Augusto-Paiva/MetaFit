@@ -14,21 +14,27 @@ export function useFoodSearch(options: UseFoodSearchOptions = {}) {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [foods, setFoods] = useState<FoodItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
+    let cancelled = false;
+
     const searchFoods = async () => {
       if (debouncedSearchTerm.length < 2) {
-        setFoods([]);
-        setLoading(false);
+        if (!cancelled) {
+          setFoods([]);
+          setIsLoading(false);
+        }
         return;
       }
 
-      setLoading(true);
-      setError(null);
+      if (!cancelled) {
+        setIsLoading(true);
+        setError(null);
+      }
 
       try {
         let query = supabase
@@ -50,37 +56,49 @@ export function useFoodSearch(options: UseFoodSearchOptions = {}) {
         if (searchError) {
           throw searchError;
         }
-        
-        setFoods(data || []);
+
+        if (!cancelled) {
+          setFoods(data || []);
+        }
       } catch (err) {
+        console.error(err);
         const errorMessage = err instanceof Error ? err.message : 'Erro ao buscar alimentos';
-        setError(errorMessage);
-        toast.error('Erro na busca', {
-          description: errorMessage
-        });
-        setFoods([]);
+        if (!cancelled) {
+          setError(errorMessage);
+          toast.error('Erro na busca', {
+            description: errorMessage
+          });
+          setFoods([]);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
-    searchFoods();
+    void searchFoods();
+
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedSearchTerm, userId, includeUserRecipes, limit]);
 
   const clearSearch = () => {
     setSearchTerm('');
     setFoods([]);
     setError(null);
+    setIsLoading(false);
   };
 
   return {
     searchTerm,
     setSearchTerm,
     foods,
-    loading,
+    loading: isLoading,
     error,
     clearSearch,
     hasResults: foods.length > 0,
-    isEmpty: debouncedSearchTerm.length >= 2 && !loading && foods.length === 0
+    isEmpty: debouncedSearchTerm.length >= 2 && !isLoading && foods.length === 0
   };
 }

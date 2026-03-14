@@ -6,17 +6,29 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishabl
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export type UserGoal = 'perda' | 'ganho' | 'manutencao';
+export type TrainingType = 'musculacao' | 'caminhada' | 'corrida' | 'crossfit';
 
 export interface AppUser {
   id: string;
   nome: string;
   peso: number;
   objetivo: UserGoal;
+  tmb_base?: number | null;
+  alteracao_calorica_alvo?: number | null;
+  treina_atualmente?: boolean | null;
+  tipo_treino?: TrainingType | null;
   calorias_meta: number | null;
   proteinas_meta: number | null;
   carbos_meta: number | null;
   gorduras_meta: number | null;
   created_at: string;
+}
+
+export interface WeightHistoryPoint {
+  id: string;
+  user_id: string;
+  peso: number;
+  date: string;
 }
 
 export interface FoodItem {

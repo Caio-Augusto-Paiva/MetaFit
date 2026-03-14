@@ -1,4 +1,5 @@
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useUserContext } from '../contexts/UserContext';
 import { Utensils, Dumbbell, Brain, LogOut, User, ArrowRightLeft } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -10,13 +11,20 @@ const tabs = [
 ];
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { profile, signOut } = useAuthContext();
+  const { profile } = useUserContext();
+  const { signOut } = useAuthContext();
   const location = useLocation();
+
+  const dynamicGlowClass = profile?.objetivo === 'ganho'
+    ? 'shadow-[0_0_28px_-10px_rgba(59,130,246,0.65)]'
+    : profile?.objetivo === 'manutencao'
+    ? 'shadow-[0_0_28px_-10px_rgba(45,212,191,0.65)]'
+    : 'shadow-[0_0_28px_-10px_rgba(249,115,22,0.65)]';
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="glass sticky top-0 z-50 px-4 py-3 flex items-center justify-between">
+      <header className={`sticky top-0 z-50 px-4 py-3 flex items-center justify-between bg-slate-950/60 backdrop-blur-lg border-b border-white/10 transition-shadow duration-300 ${dynamicGlowClass}`}>
         <h1 className="text-lg font-bold tracking-tight">
           Fit<span className="text-primary">Track</span>
         </h1>
@@ -40,7 +48,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </main>
 
       {/* Bottom Nav */}
-      <nav className="glass sticky bottom-0 z-50">
+      <nav className={`sticky bottom-0 z-50 bg-slate-950/60 backdrop-blur-lg border-t border-white/10 transition-shadow duration-300 ${dynamicGlowClass}`}>
         <div className="flex justify-around max-w-2xl mx-auto">
           {tabs.map(({ to, icon: Icon, label }) => {
             const active = location.pathname === to;

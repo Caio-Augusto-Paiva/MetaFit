@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRightLeft, Loader2 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { FoodItem } from '@/lib/supabase';
+import { FoodItem, supabase } from '@/lib/supabase';
 import { useFoodSearch } from '@/hooks/useFoodSearch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 function fmt2(value: number) {
   return Number(value || 0).toFixed(2);
@@ -49,11 +50,39 @@ function calculateEquivalence(source: FoodItem, sourceGrams: number, target: Foo
   };
 }
 
+function formatDelta(value: number): string {
+  return `${value >= 0 ? '+' : ''}${fmt2(value)}g`;
+}
+
+type MacroField = 'proteinas_g' | 'carbos_g' | 'gorduras_g';
+
+function getDominantMacro(food: FoodItem): MacroField {
+  const macroEntries: Array<{ key: MacroField; value: number }> = [
+    { key: 'proteinas_g', value: food.proteinas_g },
+    { key: 'carbos_g', value: food.carbos_g },
+    { key: 'gorduras_g', value: food.gorduras_g },
+  ];
+
+  macroEntries.sort((a, b) => b.value - a.value);
+  return macroEntries[0].key;
+}
+
+function shuffleList<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 const Equivalences = () => {
   const { user } = useAuthContext();
   const [sourceFood, setSourceFood] = useState<FoodItem | null>(null);
   const [targetFood, setTargetFood] = useState<FoodItem | null>(null);
   const [sourceGramsInput, setSourceGramsInput] = useState('100');
+  const [quickSuggestions, setQuickSuggestions] = useState<FoodItem[]>([]);
+  const [loadingQuickSuggestions, setLoadingQuickSuggestions] = useState(false);
 
   const sourceSearch = useFoodSearch({ userId: user?.id });
   const targetSearch = useFoodSearch({ userId: user?.id });
@@ -67,6 +96,63 @@ const Equivalences = () => {
 
     return calculateEquivalence(sourceFood, sourceGrams, targetFood);
   }, [sourceFood, targetFood, sourceGrams]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadQuickSuggestions = async () => {
+      if (!sourceFood) {
+        setQuickSuggestions([]);
+        setLoadingQuickSuggestions(false);
+        return;
+      }
+
+      setLoadingQuickSuggestions(true);
+      try {
+        const dominantMacro = getDominantMacro(sourceFood);
+
+        let query = supabase
+          .from('food_database')
+          .select('*')
+          .neq('id', sourceFood.id)
+          .gt(dominantMacro, 0)
+          .order(dominantMacro, { ascending: false })
+          .limit(24);
+
+        if (user?.id) {
+          query = query.or(`user_id.is.null,user_id.eq.${user.id}`);
+        } else {
+          query = query.is('user_id', null);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (cancelled) return;
+
+        const randomized = shuffleList((data || []) as FoodItem[]).slice(0, 3);
+        setQuickSuggestions(randomized);
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          setQuickSuggestions([]);
+          toast.error('Erro ao carregar sugestoes rapidas', {
+            description: error instanceof Error ? error.message : 'Tente novamente em instantes',
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingQuickSuggestions(false);
+        }
+      }
+    };
+
+    void loadQuickSuggestions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceFood, user?.id]);
 
   return (
     <div className="space-y-4">
@@ -114,6 +200,32 @@ const Equivalences = () => {
               <p className="font-medium text-sm">{sourceFood.nome}</p>
               <p className="text-xs text-muted-foreground">{fmt2(sourceFood.calorias_g)} kcal/g</p>
             </div>
+
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Quick suggestions (mesmo macro dominante)</p>
+              {loadingQuickSuggestions ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Carregando sugestoes...
+                </div>
+              ) : quickSuggestions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {quickSuggestions.map((food) => (
+                    <button
+                      key={food.id}
+                      type="button"
+                      onClick={() => setTargetFood(food)}
+                      className="px-2.5 py-1 rounded-full text-xs border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      {food.nome}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Nenhuma sugestao rapida encontrada.</p>
+              )}
+            </div>
+
             <Button variant="secondary" onClick={() => setSourceFood(null)} className="w-full">
               Trocar alimento de origem
             </Button>
@@ -184,11 +296,19 @@ const Equivalences = () => {
       {result && sourceFood && targetFood && (
         <div className="glass rounded-xl p-4 space-y-4">
           <p className="text-sm font-medium">
-            Para substituir {fmt2(sourceGrams)}g de {sourceFood.nome} ({fmt2(result.sourceCalories)} kcal), voce precisa de {fmt2(result.targetGrams)}g de {targetFood.nome} ({fmt2(result.targetCalories)} kcal).
+            Para substituir {fmt2(sourceGrams)}g de {sourceFood.nome}, consuma {fmt2(result.targetGrams)}g de {targetFood.nome}.
+          </p>
+
+          <p className="text-xs text-muted-foreground">
+            Calorias totais = {fmt2(sourceFood.calorias_g)} x {fmt2(sourceGrams)} = {fmt2(result.sourceCalories)} kcal | Gramas destino = {fmt2(result.sourceCalories)} / {fmt2(targetFood.calorias_g)} = {fmt2(result.targetGrams)}g
+          </p>
+
+          <p className="text-xs">
+            Impacto da troca: Carbo {formatDelta(result.delta.carb)} | Proteina {formatDelta(result.delta.prot)} | Gordura {formatDelta(result.delta.fat)}
           </p>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm whitespace-nowrap">
               <thead>
                 <tr className="text-left text-muted-foreground">
                   <th className="py-2">Macro</th>
@@ -208,7 +328,7 @@ const Equivalences = () => {
                     <td className="py-2">{fmt2(row.o)}g</td>
                     <td className="py-2">{fmt2(row.d)}g</td>
                     <td className={`py-2 ${row.delta >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {row.delta >= 0 ? '+' : ''}{fmt2(row.delta)}g
+                      {formatDelta(row.delta)}
                     </td>
                   </tr>
                 ))}

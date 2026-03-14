@@ -5,18 +5,21 @@ import { ChefHat, Lightbulb, Loader2, Plus, Save, Search, Trash2, X } from 'luci
 import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useAppDataContext } from '@/contexts/AppDataContext';
+import { useUserContext } from '../contexts/UserContext';
 import { supabase, FoodItem } from '@/lib/supabase';
 import { useFoodSearch } from '@/hooks/useFoodSearch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CreateRecipeModal } from '@/components/CreateRecipeModal';
+import WeightEvolutionChart from '@/components/WeightEvolutionChart';
 
 function fmt2(value: number): string {
   return Number(value || 0).toFixed(2);
 }
 
 const Dashboard = () => {
-  const { user, profile, refreshProfile } = useAuthContext();
+  const { user } = useAuthContext();
+  const { profile, updateWeightAndTrack, getConsumedTotals } = useUserContext();
   const { getDailyData, ensureDateLoaded, addMeal, deleteMeal } = useAppDataContext();
 
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -108,29 +111,17 @@ const Dashboard = () => {
   };
 
   const dailySummary = useMemo(() => {
-    let cal = 0;
-    let prot = 0;
-    let carb = 0;
-    let fat = 0;
-
-    meals.forEach((meal) => {
-      if (!meal.food_database) return;
-      const macros = calcMacros(meal.food_database, meal.quantidade_gramas);
-      cal += macros.cal;
-      prot += macros.prot;
-      carb += macros.carb;
-      fat += macros.fat;
-    });
+    const consumed = getConsumedTotals(date);
 
     const burned = workouts.reduce((acc, workout) => acc + (workout.calorias_gastas || 0), 0);
     const meta = profile?.calorias_meta || 2000;
-    const balance = meta - cal + burned;
+    const balance = meta - consumed.calorias + burned;
 
     return {
-      cal,
-      prot,
-      carb,
-      fat,
+      cal: consumed.calorias,
+      prot: consumed.proteinas,
+      carb: consumed.carbos,
+      fat: consumed.gorduras,
       burned,
       meta,
       balance,
@@ -140,7 +131,7 @@ const Dashboard = () => {
       carbMeta: profile?.carbos_meta,
       fatMeta: profile?.gorduras_meta,
     };
-  }, [meals, workouts, profile]);
+  }, [getConsumedTotals, date, workouts, profile]);
 
   const addMealEntry = async () => {
     if (!selectedFood) return;
@@ -194,10 +185,7 @@ const Dashboard = () => {
         throw new Error('Peso deve ser um numero valido maior que zero');
       }
 
-      const { error } = await supabase.from('users').update({ peso: parsedWeight }).eq('id', profile.id);
-      if (error) throw error;
-
-      refreshProfile();
+      await updateWeightAndTrack(parsedWeight);
       toast.success('Peso atualizado com sucesso');
     } catch (err) {
       toast.error('Erro ao atualizar peso', {
@@ -323,6 +311,8 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      <WeightEvolutionChart />
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">

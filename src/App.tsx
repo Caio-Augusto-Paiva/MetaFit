@@ -3,6 +3,7 @@ import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider, useAuthContext } from '@/contexts/AuthContext';
 import { AppDataProvider } from '@/contexts/AppDataContext';
+import { UserProvider } from './contexts/UserContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Auth from '@/pages/Auth';
 import Dashboard from '@/pages/Dashboard';
@@ -35,17 +36,19 @@ const App = () => (
     <BrowserRouter>
       <AuthProvider>
         <AppDataProvider>
-          <TooltipProvider>
-            <Sonner />
-            <Routes>
-              <Route path="/auth" element={<AuthRoute />} />
-              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/workouts" element={<ProtectedRoute><Workouts /></ProtectedRoute>} />
-              <Route path="/diet" element={<ProtectedRoute><Diet /></ProtectedRoute>} />
-              <Route path="/equivalencias" element={<ProtectedRoute><Equivalences /></ProtectedRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </TooltipProvider>
+          <UserProvider>
+            <TooltipProvider>
+              <Sonner />
+              <Routes>
+                <Route path="/auth" element={<AuthRoute />} />
+                <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/workouts" element={<ProtectedRoute><Workouts /></ProtectedRoute>} />
+                <Route path="/diet" element={<ProtectedRoute><Diet /></ProtectedRoute>} />
+                <Route path="/equivalencias" element={<ProtectedRoute><Equivalences /></ProtectedRoute>} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </TooltipProvider>
+          </UserProvider>
         </AppDataProvider>
       </AuthProvider>
     </BrowserRouter>
