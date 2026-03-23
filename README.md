@@ -12,3 +12,4 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+Project supported by AI
