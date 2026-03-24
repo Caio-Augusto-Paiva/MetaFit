@@ -2,20 +2,59 @@ import { useState, useEffect, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, AppUser, UserGoal } from '@/lib/supabase';
 
+const AUTH_TIMEOUT_MS = 10000;
+
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (!error && data) setProfile(data as AppUser);
+  const withTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs: number, label: string) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new Error(`${label} timeout`));
+          }, timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
   }, []);
+
+  const fetchProfile = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single(),
+        AUTH_TIMEOUT_MS,
+        'fetchProfile'
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setProfile(data as AppUser);
+      } else {
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar perfil do usuario:', error);
+      setProfile(null);
+    }
+  }, [withTimeout]);
 
   const updateProfile = useCallback(async (payload: Partial<Pick<AppUser, 'nome' | 'peso' | 'objetivo' | 'alteracao_calorica_alvo' | 'treina_atualmente' | 'tipo_treino' | 'calorias_meta' | 'proteinas_meta' | 'carbos_meta' | 'gorduras_meta'>>) => {
     if (!user?.id) {
@@ -47,28 +86,68 @@ export function useAuth() {
   }, [user?.id, profile]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        } else {
-          setProfile(null);
+    const applySessionState = async (nextSession: Session | null) => {
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+
+      if (nextSession?.user) {
+        await fetchProfile(nextSession.user.id);
+      } else {
+        setProfile(null);
+      }
+    };
+
+    const handleAuthStateChange = async (event: string, nextSession: Session | null) => {
+      const trackedEvents = event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT';
+
+      if (trackedEvents) {
+        setLoading(true);
+      }
+
+      try {
+        await applySessionState(nextSession);
+      } catch (error) {
+        console.error('Erro no onAuthStateChange:', error);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+      } finally {
+        if (trackedEvents) {
+          setLoading(false);
         }
-        setLoading(false);
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, nextSession) => {
+        void handleAuthStateChange(event, nextSession);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      setLoading(false);
-    });
+    const initializeAuth = async () => {
+      setLoading(true);
+
+      try {
+        const { data: { session: initialSession } } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_TIMEOUT_MS,
+          'getSession'
+        );
+        await applySessionState(initialSession);
+      } catch (error) {
+        console.error('Erro ao inicializar sessao:', error);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void initializeAuth();
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile]);
+  }, [fetchProfile, withTimeout]);
 
   useEffect(() => {
     if (!user?.id) return;
