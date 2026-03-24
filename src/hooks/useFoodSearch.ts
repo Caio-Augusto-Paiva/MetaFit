@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, FoodItem } from '@/lib/supabase';
 import { useDebounce } from './useDebounce';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ interface UseFoodSearchOptions {
 
 export function useFoodSearch(options: UseFoodSearchOptions = {}) {
   const { userId, includeUserRecipes = true, limit = 15 } = options;
+  const searchOptionsRef = useRef({ userId, includeUserRecipes, limit });
   
   const [searchTerm, setSearchTerm] = useState('');
   const [foods, setFoods] = useState<FoodItem[]>([]);
@@ -20,32 +21,67 @@ export function useFoodSearch(options: UseFoodSearchOptions = {}) {
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   useEffect(() => {
+    searchOptionsRef.current = { userId, includeUserRecipes, limit };
+  }, [userId, includeUserRecipes, limit]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const searchFoods = async () => {
-      if (debouncedSearchTerm.length < 2) {
+      const normalizedTerm = debouncedSearchTerm.trim();
+
+      if (normalizedTerm.length < 2) {
         if (!cancelled) {
           setFoods([]);
           setIsLoading(false);
+          setError(null);
         }
         return;
       }
 
+      const {
+        userId: currentUserId,
+        includeUserRecipes: shouldIncludeUserRecipes,
+        limit: currentLimit
+      } = searchOptionsRef.current;
+      const cacheKey = `food-search:${normalizedTerm.toLowerCase()}:${currentUserId ?? 'anon'}:${shouldIncludeUserRecipes ? 'with-user' : 'global-only'}:${currentLimit}`;
+
       if (!cancelled) {
+        // Mark loading only when a real network/cache search starts.
         setIsLoading(true);
         setError(null);
       }
 
       try {
+        try {
+          const cachedData = localStorage.getItem(cacheKey);
+          if (cachedData) {
+            const parsedCache = JSON.parse(cachedData) as FoodItem[];
+            if (Array.isArray(parsedCache)) {
+              if (!cancelled) {
+                setFoods(parsedCache);
+              }
+              return;
+            }
+          }
+        } catch (cacheError) {
+          console.warn('Failed to read food search cache:', cacheError);
+          try {
+            localStorage.removeItem(cacheKey);
+          } catch {
+            // Ignore cache cleanup issues to keep the search functional.
+          }
+        }
+
         let query = supabase
           .from('food_database')
           .select('*')
-          .ilike('nome', `%${debouncedSearchTerm}%`)
-          .limit(limit);
+          .ilike('nome', `%${normalizedTerm}%`)
+          .limit(currentLimit);
 
-        if (includeUserRecipes && userId) {
+        if (shouldIncludeUserRecipes && currentUserId) {
           // Buscar alimentos globais (user_id IS NULL) OU receitas do usuário (user_id = userId)
-          query = query.or(`user_id.is.null,user_id.eq.${userId}`);
+          query = query.or(`user_id.is.null,user_id.eq.${currentUserId}`);
         } else {
           // Apenas alimentos globais
           query = query.is('user_id', null);
@@ -59,6 +95,12 @@ export function useFoodSearch(options: UseFoodSearchOptions = {}) {
 
         if (!cancelled) {
           setFoods(data || []);
+        }
+
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(data || []));
+        } catch (cacheError) {
+          console.warn('Failed to write food search cache:', cacheError);
         }
       } catch (err) {
         console.error(err);
@@ -82,7 +124,7 @@ export function useFoodSearch(options: UseFoodSearchOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearchTerm, userId, includeUserRecipes, limit]);
+  }, [debouncedSearchTerm]);
 
   const clearSearch = () => {
     setSearchTerm('');
