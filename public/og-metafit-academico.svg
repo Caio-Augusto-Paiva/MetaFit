@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1F44"/>
+      <stop offset="1" stop-color="#0B3A66"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="150" y1="190" x2="1040" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#22C55E" stop-opacity="0.20"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1200" height="630" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" rx="32" fill="url(#bg)"/>
+  <rect x="56" y="56" width="1088" height="518" rx="28" fill="url(#accent)"/>
+
+  <g opacity="0.22">
+    <path d="M95 514C255 426 395 494 560 420C721 347 881 279 1098 338" stroke="#93C5FD" stroke-width="4"/>
+    <path d="M95 552C250 492 372 532 522 472C684 407 852 372 1098 402" stroke="#86EFAC" stroke-width="4"/>
+    <path d="M95 470H1098" stroke="#FFFFFF" stroke-opacity="0.24" stroke-width="2" stroke-dasharray="8 10"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="126" y="116" width="74" height="364" rx="14" fill="#F8FAFC" fill-opacity="0.92"/>
+    <rect x="1000" y="116" width="74" height="364" rx="14" fill="#F8FAFC" fill-opacity="0.92"/>
+    <rect x="194" y="262" width="812" height="72" rx="16" fill="#E2E8F0"/>
+    <rect x="208" y="276" width="198" height="44" rx="10" fill="#38BDF8"/>
+    <rect x="794" y="276" width="198" height="44" rx="10" fill="#22C55E"/>
+  </g>
+
+  <text x="250" y="206" fill="#E2E8F0" font-size="30" font-family="Georgia, Cambria, Times New Roman, serif" letter-spacing="2">LABORATORIO DE TREINO E NUTRICAO</text>
+  <text x="250" y="302" fill="#FFFFFF" font-size="86" font-weight="700" font-family="Georgia, Cambria, Times New Roman, serif">MetaFit</text>
+  <text x="250" y="362" fill="#CBD5E1" font-size="33" font-family="Georgia, Cambria, Times New Roman, serif">Acompanhamento academico com dados de dieta, macros e evolucao.</text>
+
+  <g>
+    <circle cx="250" cy="424" r="7" fill="#38BDF8"/>
+    <text x="270" y="432" fill="#E2E8F0" font-size="27" font-family="Georgia, Cambria, Times New Roman, serif">Planejamento alimentar</text>
+
+    <circle cx="610" cy="424" r="7" fill="#22C55E"/>
+    <text x="630" y="432" fill="#E2E8F0" font-size="27" font-family="Georgia, Cambria, Times New Roman, serif">Periodizacao de treino</text>
+  </g>
+</svg>
